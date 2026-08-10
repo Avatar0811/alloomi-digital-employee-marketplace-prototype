@@ -1,0 +1,14 @@
+node_modules/
+dist/
+.DS_Store
+*.log
+
+# Local product-design and QA artifacts are not part of the public prototype.
+/AGENTS.md
+/design-qa.md
+/*.png
+/references/
+/public/qa/
+/public/qa-*.html
+/public/qa-reference.png
+/public/implementation-marketplace-pass1.png
