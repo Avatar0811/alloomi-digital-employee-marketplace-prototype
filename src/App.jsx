@@ -324,7 +324,7 @@ function EmploymentStatus({ status, compact = false }) {
   return <span className={`employment-status ${status === "active" ? "active" : "suspended"} ${compact ? "compact" : ""}`}><span aria-hidden="true" />{status === "active" ? "在职中" : "停职中"}</span>;
 }
 
-function EmployeeCard({ employee, status, expanded, onEnter, onLeave, onDetails, onPrimaryAction }) {
+function EmployeeCard({ employee, status, expanded, onEnter, onLeave, onDetails, onPrimaryAction, onDismiss }) {
   const isActive = status === "active";
   const isSuspended = status === "suspended";
   const primaryLabel = isActive ? "暂停聘用" : "立即聘用";
@@ -365,6 +365,7 @@ function EmployeeCard({ employee, status, expanded, onEnter, onLeave, onDetails,
           <div className="card-badges"><span>Alloomi Verified</span><span>{employee.entitlement}</span></div>
           <div className="card-actions">
             <button className="button secondary small" onClick={(event) => { event.stopPropagation(); onDetails(employee); }}>查看详情</button>
+            {(isActive || isSuspended) && <button className="button danger-secondary small" onClick={(event) => { event.stopPropagation(); onDismiss(employee); }}>立即解聘</button>}
             <button className={`button ${isActive ? "warning" : "primary"} small`} onClick={(event) => { event.stopPropagation(); onPrimaryAction(employee); }}>{primaryLabel}</button>
           </div>
         </div>
@@ -818,6 +819,7 @@ export function App() {
                 onLeave={() => setExpandedId(null)}
                 onDetails={setDetailEmployee}
                 onPrimaryAction={requestPrimaryAction}
+                onDismiss={(item) => setLifecycleAction({ type: "dismiss", employee: item })}
               />
             ))}
           </section>

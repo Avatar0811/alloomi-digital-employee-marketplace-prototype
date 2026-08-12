@@ -153,6 +153,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, [tabindex]:fo
 .card-badges { display: flex; gap: 5px; min-width: 0; }
 .card-badges span { padding: 5px 8px; border-radius: 10px; background: #eef4ff; color: #3971ca; font-size: 11px; white-space: nowrap; }
 .card-actions { display: flex; gap: 7px; }
+.card-actions .button.danger-secondary.small { padding-inline: 11px; }
 
 .button { border: 1px solid transparent; border-radius: 10px; height: 42px; padding: 0 20px; font-weight: 700; font-size: 13px; white-space: nowrap; cursor: pointer; transition: .18s ease; }
 .button.small { height: 32px; border-radius: 8px; padding: 0 14px; font-size: 12px; }
