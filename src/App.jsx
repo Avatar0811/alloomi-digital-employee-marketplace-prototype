@@ -233,18 +233,63 @@ function Icon({ name, className = "" }) {
   return <i aria-hidden="true" className={`app-icon ${className}`} dangerouslySetInnerHTML={{ __html: iconByName[name] || "" }} />;
 }
 
-function Sidebar({ onToast }) {
+function Sidebar({ activeEmployees, currentEmployee, currentView, onChooseEmployee, onOpenMarket, onToast }) {
+  const [switcherOpen, setSwitcherOpen] = useState(false);
+  const hasEmployees = activeEmployees.length > 0;
+
+  const chooseEmployee = (employee) => {
+    setSwitcherOpen(false);
+    onChooseEmployee(employee);
+  };
+
   return (
     <aside className="sidebar" aria-label="主导航">
-      <button className="employee-switcher" onClick={() => onToast("员工切换器已打开") }>
+      <button
+        className={`employee-switcher ${switcherOpen ? "open" : ""}`}
+        aria-expanded={switcherOpen}
+        aria-haspopup="menu"
+        onClick={() => {
+          if (!hasEmployees) {
+            onOpenMarket();
+            onToast("聘用一位数字员工后，可在这里切换工作区");
+            return;
+          }
+          setSwitcherOpen((current) => !current);
+        }}
+      >
         <span className="switcher-label">我的员工</span>
         <Icon name="ri-arrow-down-s-line" className="switcher-chevron" />
         <span className="switcher-row">
-          <img src={assetUrl("assets/mia.png")} alt="AvatarOne" />
-          <span><strong>AvatarOne</strong><small>AI 销售助手</small></span>
+          {currentEmployee ? <img src={currentEmployee.portrait} alt={`${currentEmployee.name} 头像`} /> : <span className="switcher-empty-avatar"><Icon name="ri-user-star-fill" /></span>}
+          <span>
+            <strong>{currentEmployee ? currentEmployee.name : "暂未聘用员工"}</strong>
+            <small>{currentEmployee ? currentEmployee.role : "前往人才市场聘用"}</small>
+          </span>
           <Icon name="ri-equalizer-2-line" />
         </span>
       </button>
+
+      {switcherOpen && hasEmployees && (
+        <div className="employee-switch-menu" role="menu" aria-label="切换数字员工">
+          <span className="switch-menu-title">在职员工</span>
+          {activeEmployees.map((employee) => (
+            <button
+              type="button"
+              role="menuitem"
+              key={employee.id}
+              className={currentEmployee?.id === employee.id && currentView === "workspace" ? "selected" : ""}
+              onClick={() => chooseEmployee(employee)}
+            >
+              <img src={employee.portrait} alt="" />
+              <span><strong>{employee.name}</strong><small>{employee.role}</small></span>
+              {currentEmployee?.id === employee.id && currentView === "workspace" && <Icon name="ri-check-line" />}
+            </button>
+          ))}
+          <button type="button" className="switch-menu-market" onClick={() => { setSwitcherOpen(false); onOpenMarket(); }}>
+            <Icon name="ri-store-3-line" />浏览人才市场
+          </button>
+        </div>
+      )}
 
       <nav className="side-nav">
         {[
@@ -256,9 +301,9 @@ function Sidebar({ onToast }) {
         ].map(([icon, label]) => (
           <button
             key={label}
-            className={label === "人才市场" ? "active" : ""}
-            aria-current={label === "人才市场" ? "page" : undefined}
-            onClick={() => label !== "人才市场" && onToast(`${label} 为演示导航`) }
+            className={label === "人才市场" && currentView === "marketplace" ? "active" : ""}
+            aria-current={label === "人才市场" && currentView === "marketplace" ? "page" : undefined}
+            onClick={() => label === "人才市场" ? onOpenMarket() : onToast(`${label} 为演示导航`) }
           >
             <Icon name={icon} /><span>{label}</span>
           </button>
@@ -274,10 +319,20 @@ function Sidebar({ onToast }) {
   );
 }
 
-function EmployeeCard({ employee, expanded, onEnter, onLeave, onDetails, onHire }) {
+function EmploymentStatus({ status, compact = false }) {
+  if (!status) return null;
+  return <span className={`employment-status ${status === "active" ? "active" : "suspended"} ${compact ? "compact" : ""}`}><span aria-hidden="true" />{status === "active" ? "在职中" : "停职中"}</span>;
+}
+
+function EmployeeCard({ employee, status, expanded, onEnter, onLeave, onDetails, onPrimaryAction }) {
+  const isActive = status === "active";
+  const isSuspended = status === "suspended";
+  const primaryLabel = isActive ? "暂停聘用" : "立即聘用";
+  const compatibility = isActive ? "正在主动工作" : isSuspended ? "自动任务已暂停，不产生 token 消耗" : employee.compatibility;
+
   return (
     <article
-      className={`employee-card ${expanded ? "is-expanded" : ""}`}
+      className={`employee-card ${expanded ? "is-expanded" : ""} ${status ? `is-${status}` : ""}`}
       tabIndex="0"
       aria-label={`${employee.name} ${employee.role}`}
       onMouseEnter={onEnter}
@@ -287,6 +342,7 @@ function EmployeeCard({ employee, expanded, onEnter, onLeave, onDetails, onHire 
         if (!event.currentTarget.contains(event.relatedTarget)) onLeave();
       }}
     >
+      <EmploymentStatus status={status} />
       <span className="limited-free-badge" aria-label="限时免费">限免</span>
       <div className="employee-card-core">
         <img className="employee-portrait" src={employee.portrait} alt={`${employee.name} 头像`} />
@@ -301,15 +357,15 @@ function EmployeeCard({ employee, expanded, onEnter, onLeave, onDetails, onHire 
       <div className="hover-details" aria-hidden={!expanded}>
         <div className="detail-row"><strong>核心工作流：</strong><span>{employee.workflows.join(" / ")}</span></div>
         <div className="detail-row"><strong>推荐：</strong><span>{employee.connectors.map((item) => item[1]).join(" + ")}</span></div>
-        <div className={`compatibility ${employee.compatibility.includes("立即") ? "ready" : "action"}`}>
-          <Icon name={employee.compatibility.includes("立即") ? "ri-checkbox-circle-fill" : "ri-information-fill"} />
-          {employee.compatibility}
+        <div className={`compatibility ${isSuspended ? "paused" : compatibility.includes("立即") || isActive ? "ready" : "action"}`}>
+          <Icon name={isSuspended ? "ri-information-fill" : compatibility.includes("立即") || isActive ? "ri-checkbox-circle-fill" : "ri-information-fill"} />
+          {compatibility}
         </div>
         <div className="card-footer">
           <div className="card-badges"><span>Alloomi Verified</span><span>{employee.entitlement}</span></div>
           <div className="card-actions">
             <button className="button secondary small" onClick={(event) => { event.stopPropagation(); onDetails(employee); }}>查看详情</button>
-            <button className="button primary small" onClick={(event) => { event.stopPropagation(); onHire(employee); }}>立即雇佣</button>
+            <button className={`button ${isActive ? "warning" : "primary"} small`} onClick={(event) => { event.stopPropagation(); onPrimaryAction(employee); }}>{primaryLabel}</button>
           </div>
         </div>
       </div>
@@ -317,9 +373,12 @@ function EmployeeCard({ employee, expanded, onEnter, onLeave, onDetails, onHire 
   );
 }
 
-function DetailDrawer({ employee, onClose, onHire }) {
+function DetailDrawer({ employee, status, onClose, onPrimaryAction, onDismiss }) {
   const [expandedWorkflow, setExpandedWorkflow] = useState(0);
   if (!employee) return null;
+  const isActive = status === "active";
+  const isSuspended = status === "suspended";
+  const primaryLabel = isActive ? "暂停聘用" : "立即聘用";
   return (
     <div className="overlay" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
       <section className="detail-drawer" role="dialog" aria-modal="true" aria-labelledby="drawer-title">
@@ -330,7 +389,7 @@ function DetailDrawer({ employee, onClose, onHire }) {
             <img src={employee.portrait} alt={`${employee.name} 头像`} />
             <div><h2 id="drawer-title">{employee.name}</h2><p>{employee.role}</p></div>
           </div>
-          <span className="verified-pill"><Icon name="ri-verified-badge-fill" /> Alloomi Verified</span>
+          <div className="drawer-badges"><span className="verified-pill"><Icon name="ri-verified-badge-fill" /> Alloomi Verified</span><EmploymentStatus status={status} compact /></div>
         </header>
 
         <div className="drawer-scroll">
@@ -353,14 +412,17 @@ function DetailDrawer({ employee, onClose, onHire }) {
           </section>
 
           <section className="compat-card">
-            <div><Icon name="ri-shield-check-fill" /><span><strong>{employee.compatibility}</strong><small>将使用当前连接器与权限范围进入员工配置</small></span></div>
-            <button className="text-button" onClick={() => onHire(employee)}>开始配置</button>
+            <div><Icon name={isSuspended ? "ri-information-fill" : "ri-shield-check-fill"} /><span><strong>{isActive ? "正在为你工作" : isSuspended ? "任务已暂停" : employee.compatibility}</strong><small>{isActive ? "主动式任务与有效自动任务正在运行" : isSuspended ? "不再主动工作，自动任务也不会产生 token 消耗" : "将使用当前连接器与权限范围进入员工配置"}</small></span></div>
+            {!isActive && !isSuspended && <button className="text-button" onClick={() => onPrimaryAction(employee)}>开始配置</button>}
           </section>
+
+          {(isActive || isSuspended) && <section className="drawer-section lifecycle-notice"><h3>员工状态说明</h3><p>{isActive ? "当前员工已在 Alloomi 首页左上角展示。你可切换进入该员工对应的工作区。" : "该员工暂不在首页员工列表中展示；重新聘用后，主动式任务和有效期内的自动任务将恢复。"}</p></section>}
         </div>
 
         <footer className="drawer-actions">
           <button className="button secondary" onClick={onClose}>返回市场</button>
-          <button className="button primary" onClick={() => onHire(employee)}>立即雇佣</button>
+          {(isActive || isSuspended) && <button className="button danger-secondary" onClick={() => onDismiss(employee)}>立即解聘</button>}
+          <button className={`button ${isActive ? "warning" : "primary"}`} onClick={() => onPrimaryAction(employee)}>{primaryLabel}</button>
         </footer>
       </section>
     </div>
@@ -578,10 +640,67 @@ function HireFlow({ employee, onClose, onComplete }) {
         <footer className="hire-actions">
           {phase === "configure" && <><button className="button secondary" onClick={onClose}>取消</button><button className="button primary" disabled={!goalAction.trim() || !name.trim() || !industry || !audience || selectedConnectorIds.length === 0} onClick={() => setPhase("review")}>继续确认</button></>}
           {phase === "review" && <><button className="button secondary" onClick={() => setPhase("configure")}>返回修改</button><button className="button primary" onClick={() => setPhase("initializing")}>确认雇佣</button></>}
-          {phase === "success" && <button className="button primary full" onClick={() => onComplete(name)}>进入员工工作区</button>}
+          {phase === "success" && <button className="button primary full" onClick={() => onComplete({ ...employee, name: name.trim() || employee.name })}>进入员工工作区</button>}
         </footer>
       </section>
     </div>
+  );
+}
+
+function LifecycleConfirm({ type, employee, onClose, onConfirm }) {
+  if (!type || !employee) return null;
+  const isPause = type === "pause";
+  const title = isPause ? `暂停聘用 ${employee.name}？` : `立即解聘 ${employee.name}？`;
+  const description = isPause
+    ? `暂停聘用后，${employee.name} 将不再主动工作，你可以随时聘用 ${employee.name}。`
+    : `解聘后，${employee.name} 的记忆不会丢失，但自动任务等配置信息将恢复初始状态。`;
+  const details = isPause
+    ? ["主动式任务将停止", "该员工下的自动任务将自动暂停", "暂停期间不产生 token 消耗", "重新聘用后，有效期内的自动任务会恢复"]
+    : ["生成一份交接文档（handoff）并保存为记忆", "自动任务与员工配置恢复为初始状态", "历史事项中将不再展示该员工的历史任务", "员工卡片恢复为未聘用状态"];
+  const icon = isPause ? "ri-history-line" : "ri-close-circle-fill";
+  const action = isPause ? "确认暂停聘用" : "确认立即解聘";
+
+  return (
+    <div className="overlay strong" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
+      <section className={`lifecycle-modal ${isPause ? "pause" : "dismiss"}`} role="dialog" aria-modal="true" aria-labelledby="lifecycle-title">
+        <button className="icon-button lifecycle-close" aria-label="关闭确认窗口" onClick={onClose}><Icon name="ri-close-line" /></button>
+        <div className="lifecycle-icon"><Icon name={icon} /></div>
+        <h2 id="lifecycle-title">{title}</h2>
+        <p className="lifecycle-description">{description}</p>
+        <div className="lifecycle-impact">
+          <span>{isPause ? "暂停后将发生" : "解聘后将发生"}</span>
+          <ul>{details.map((item) => <li key={item}><Icon name={isPause ? "ri-checkbox-circle-fill" : "ri-information-fill"} />{item}</li>)}</ul>
+        </div>
+        <div className="lifecycle-actions">
+          <button className="button secondary" onClick={onClose}>取消</button>
+          <button className={`button ${isPause ? "warning" : "danger"}`} onClick={onConfirm}>{action}</button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function Workspace({ employee, onBackToMarket, onToast }) {
+  if (!employee) return null;
+  return (
+    <main className="workspace-view">
+      <div className="workspace-topbar">
+        <button className="workspace-back" onClick={onBackToMarket}><Icon name="ri-store-3-line" />返回人才市场</button>
+        <span>当前工作区</span>
+      </div>
+      <section className="workspace-hero">
+        <div className="workspace-identity">
+          <img src={employee.portrait} alt={`${employee.name} 头像`} />
+          <div><span>数字员工工作区</span><h1>{employee.name}</h1><p>{employee.role} · {employee.outcome}</p></div>
+        </div>
+        <EmploymentStatus status="active" />
+      </section>
+      <section className="workspace-grid">
+        <article className="workspace-card current-plan"><div className="workspace-card-heading"><span><Icon name="ri-sparkling-2-fill" />本周工作计划</span><button onClick={() => onToast("工作计划详情为演示内容")}>查看全部</button></div><h2>{employee.workflows[0]}</h2><p>正在基于已授权上下文梳理最优先事项，完成后会在今日事项中提醒你确认。</p><div className="workspace-progress"><span style={{ width: "68%" }} /><small>进行中 · 68%</small></div></article>
+        <article className="workspace-card"><div className="workspace-card-heading"><span><Icon name="ri-list-check-3" />自动任务</span><button onClick={() => onToast("自动任务为演示入口")}>管理</button></div><strong>3 个任务正常运行</strong><p>所有高风险写入与外发动作均会等待你的确认。</p></article>
+        <article className="workspace-card"><div className="workspace-card-heading"><span><Icon name="ri-history-line" />历史事项</span><button onClick={() => onToast("历史事项为演示入口")}>查看</button></div><strong>已保留历史任务与决策记录</strong><p>暂停后仍可进入此处查看历史任务；解聘后历史任务会隐藏，交接文档会保存为记忆。</p></article>
+      </section>
+    </main>
   );
 }
 
@@ -597,7 +716,14 @@ export function App() {
   const [expandedId, setExpandedId] = useState("mia");
   const [detailEmployee, setDetailEmployee] = useState(null);
   const [hireEmployee, setHireEmployee] = useState(null);
+  const [employment, setEmployment] = useState({});
+  const [lifecycleAction, setLifecycleAction] = useState(null);
+  const [workspaceEmployee, setWorkspaceEmployee] = useState(null);
+  const [view, setView] = useState("marketplace");
   const [toast, setToast] = useState("");
+
+  const activeEmployees = useMemo(() => employees.filter((employee) => employment[employee.id] === "active"), [employment]);
+  const currentEmployee = workspaceEmployee && employment[workspaceEmployee.id] === "active" ? workspaceEmployee : activeEmployees[0] || null;
 
   const filteredEmployees = useMemo(() => {
     const normalized = query.trim().toLowerCase();
@@ -618,10 +744,59 @@ export function App() {
     if (!filteredEmployees.some((employee) => employee.id === expandedId)) setExpandedId(null);
   }, [filteredEmployees, expandedId]);
 
+  const openMarket = () => {
+    setView("marketplace");
+    setDetailEmployee(null);
+  };
+
+  const enterWorkspace = (employee) => {
+    setWorkspaceEmployee(employee);
+    setView("workspace");
+  };
+
+  const requestPrimaryAction = (employee) => {
+    const status = employment[employee.id];
+    if (status === "active") {
+      setDetailEmployee(null);
+      setLifecycleAction({ type: "pause", employee });
+      return;
+    }
+    if (status === "suspended") {
+      setEmployment((current) => ({ ...current, [employee.id]: "active" }));
+      setWorkspaceEmployee(employee);
+      setDetailEmployee(null);
+      setToast(`${employee.name} 已重新聘用，主动式任务与有效自动任务已恢复`);
+      return;
+    }
+    setDetailEmployee(null);
+    setHireEmployee(employee);
+  };
+
+  const confirmLifecycleAction = () => {
+    if (!lifecycleAction) return;
+    const { type, employee } = lifecycleAction;
+    if (type === "pause") {
+      setEmployment((current) => ({ ...current, [employee.id]: "suspended" }));
+      if (workspaceEmployee?.id === employee.id) setWorkspaceEmployee(null);
+      setView("marketplace");
+      setToast(`${employee.name} 已暂停聘用，自动任务已暂停且不再产生 token 消耗`);
+    } else {
+      setEmployment((current) => {
+        const next = { ...current };
+        delete next[employee.id];
+        return next;
+      });
+      if (workspaceEmployee?.id === employee.id) setWorkspaceEmployee(null);
+      setView("marketplace");
+      setToast(`${employee.name} 已解聘，交接文档已保存为记忆`);
+    }
+    setLifecycleAction(null);
+  };
+
   return (
     <div className="app-shell">
-      <Sidebar onToast={setToast} />
-      <main className="marketplace">
+      <Sidebar activeEmployees={activeEmployees} currentEmployee={currentEmployee} currentView={view} onChooseEmployee={enterWorkspace} onOpenMarket={openMarket} onToast={setToast} />
+      {view === "workspace" && currentEmployee ? <Workspace employee={currentEmployee} onBackToMarket={openMarket} onToast={setToast} /> : <main className="marketplace">
         <header className="market-header">
           <div><h1>数字员工人才市场</h1><p>选择一位对业务结果负责的 AI 同事</p></div>
           <label className="search-box"><Icon name="ri-search-line" /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索数字员工或岗位" aria-label="搜索数字员工或岗位" />{query && <button onClick={() => setQuery("")} aria-label="清除搜索"><Icon name="ri-close-circle-fill" /></button>}</label>
@@ -637,19 +812,21 @@ export function App() {
               <EmployeeCard
                 key={employee.id}
                 employee={employee}
+                status={employment[employee.id]}
                 expanded={expandedId === employee.id}
                 onEnter={() => setExpandedId(employee.id)}
                 onLeave={() => setExpandedId(null)}
                 onDetails={setDetailEmployee}
-                onHire={(item) => { setDetailEmployee(null); setHireEmployee(item); }}
+                onPrimaryAction={requestPrimaryAction}
               />
             ))}
           </section>
         ) : <EmptyState query={query || category} onClear={() => { setQuery(""); setCategory("全部"); }} />}
-      </main>
+      </main>}
 
-      <DetailDrawer employee={detailEmployee} onClose={() => setDetailEmployee(null)} onHire={(employee) => { setDetailEmployee(null); setHireEmployee(employee); }} />
-      <HireFlow employee={hireEmployee} onClose={() => setHireEmployee(null)} onComplete={(name) => { setHireEmployee(null); setToast(`${name} 已加入员工工作区`); }} />
+      <DetailDrawer employee={detailEmployee} status={detailEmployee ? employment[detailEmployee.id] : undefined} onClose={() => setDetailEmployee(null)} onPrimaryAction={requestPrimaryAction} onDismiss={(employee) => { setDetailEmployee(null); setLifecycleAction({ type: "dismiss", employee }); }} />
+      <HireFlow employee={hireEmployee} onClose={() => setHireEmployee(null)} onComplete={(employee) => { setEmployment((current) => ({ ...current, [employee.id]: "active" })); setHireEmployee(null); enterWorkspace(employee); setToast(`${employee.name} 已加入员工工作区`); }} />
+      <LifecycleConfirm type={lifecycleAction?.type} employee={lifecycleAction?.employee} onClose={() => setLifecycleAction(null)} onConfirm={confirmLifecycleAction} />
       <div className={`toast ${toast ? "show" : ""}`} role="status"><Icon name="ri-checkbox-circle-fill" />{toast}</div>
     </div>
   );
